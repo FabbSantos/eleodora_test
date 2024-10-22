@@ -1,56 +1,42 @@
+import json
 import streamlit as st
-from openai import OpenAI
+import urllib.request
+import urllib.parse
 
 # Show title and description.
-st.title("💬 Chatbot")
+st.title("💬 Eleodora")
 st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
+    "This is Eleodora. Lumina's AI Assistant. "
+    "She's designed to be whomever you want, and act just like you. "
+    "You can talk to her here:"
 )
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
+
+query = st.text_input("Enter your question", type="default")
+if not query:
+    st.info("Please enter a question to continue.", icon="🗝️")
 else:
+    url = "http://34.31.9.224:8000/ai"
+    data = {"query": query}  
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+    try:
+        encoded_data = json.dumps(data).encode("utf-8")
 
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+        request = urllib.request.Request(url, data=encoded_data, headers={"Content-Type": "application/json"})
 
-    # Display the existing chat messages via `st.chat_message`.
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        with urllib.request.urlopen(request) as response:
+            response_bytes = response.read()
+            response_str = response_bytes.decode("utf-8")  
 
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
+            try:
+                data = json.loads(response_str)
+                answer = data.get("answer", "I'm still learning, but I couldn't find an answer.")
+                st.write(answer)
+            except st.json.JSONDecodeError:
+                st.error(f"Error parsing response: {response_str}")
 
-        # Store and display the current prompt.
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        # Generate a response using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
-        )
-
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+    except urllib.error.URLError as e:
+        st.error(f"An error occurred: {e}")
+    except Exception as e:  # Catch generic exceptions for unexpected errors
+        st.error(f"Unexpected error: {e}")
+    
